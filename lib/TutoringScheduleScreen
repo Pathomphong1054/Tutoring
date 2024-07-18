@@ -1,0 +1,176 @@
+import 'package:flutter/material.dart';
+import 'package:table_calendar/table_calendar.dart';
+import 'package:flutter_rounded_date_picker/flutter_rounded_date_picker.dart';
+
+class TutoringScheduleScreen extends StatefulWidget {
+  @override
+  _TutoringScheduleScreenState createState() => _TutoringScheduleScreenState();
+}
+
+class _TutoringScheduleScreenState extends State<TutoringScheduleScreen> {
+  String selectedSubject = 'Math';
+  DateTime? selectedDay;
+  TimeOfDay? startTime;
+  TimeOfDay? endTime;
+  int selectedRate = 1;
+
+  List<String> subjects = ['Math', 'Science', 'English'];
+  List<Map<String, dynamic>> rates = [
+    {'people': 1, 'price': 200},
+    {'people': 2, 'price': 500},
+    {'people': 3, 'price': 700}
+  ];
+
+  CalendarFormat _calendarFormat = CalendarFormat.month;
+  DateTime _focusedDay = DateTime.now();
+
+  Future<void> _selectTime(BuildContext context, bool isStartTime) async {
+    final timePicked = await showRoundedTimePicker(
+      context: context,
+      initialTime: isStartTime ? startTime ?? TimeOfDay(hour: 13, minute: 0) : endTime ?? TimeOfDay(hour: 15, minute: 0),
+      locale: Locale('en'),
+    );
+
+    if (timePicked != null) {
+      setState(() {
+        if (isStartTime) {
+          startTime = timePicked;
+        } else {
+          endTime = timePicked;
+        }
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Tutoring Schedule'),
+        backgroundColor: Colors.blue[800], // Set app bar background color
+      ),
+      body: SingleChildScrollView(
+        padding: EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Calendar
+            TableCalendar(
+              calendarFormat: _calendarFormat,
+              focusedDay: _focusedDay,
+              firstDay: DateTime.utc(2024, 1, 1),
+              lastDay: DateTime.utc(2024, 12, 31),
+              selectedDayPredicate: (day) {
+                return isSameDay(selectedDay, day);
+              },
+              onDaySelected: (selectedDay, focusedDay) {
+                setState(() {
+                  this.selectedDay = selectedDay;
+                });
+              },
+              onPageChanged: (focusedDay) {
+                _focusedDay = focusedDay;
+              },
+            ),
+            SizedBox(height: 20),
+            // Subject dropdown
+            Text('Subject'),
+            DropdownButton<String>(
+              value: selectedSubject,
+              onChanged: (newValue) {
+                setState(() {
+                  selectedSubject = newValue!;
+                });
+              },
+              items: subjects.map<DropdownMenuItem<String>>((String value) {
+                return DropdownMenuItem<String>(
+                  value: value,
+                  child: Text(value),
+                );
+              }).toList(),
+            ),
+            SizedBox(height: 10),
+            // Time selection
+            Row(
+              children: [
+                Text('Start Time: '),
+                ElevatedButton(
+                  onPressed: () {
+                    _selectTime(context, true);
+                  },
+                  style: ButtonStyle(
+                    backgroundColor: MaterialStateProperty.all<Color>(Colors.blue), // Set button background color
+                  ),
+                  child: Text(startTime != null ? startTime!.format(context) : 'Select'),
+                ),
+                SizedBox(width: 10),
+                Text('End Time: '),
+                ElevatedButton(
+                  onPressed: () {
+                    _selectTime(context, false);
+                  },
+                  style: ButtonStyle(
+                    backgroundColor: MaterialStateProperty.all<Color>(Colors.blue), // Set button background color
+                  ),
+                  child: Text(endTime != null ? endTime!.format(context) : 'Select'),
+                ),
+              ],
+            ),
+            SizedBox(height: 10),
+            // Price rate
+            Text('Price rate'),
+            ListView.builder(
+              shrinkWrap: true,
+              physics: NeverScrollableScrollPhysics(),
+              itemCount: rates.length,
+              itemBuilder: (context, index) {
+                return RadioListTile<int>(
+                  title: Text('${rates[index]['people']} คน | ราคา ${rates[index]['price']} บาท'),
+                  value: rates[index]['people'],
+                  groupValue: selectedRate,
+                  onChanged: (int? value) {
+                    setState(() {
+                      selectedRate = value!;
+                    });
+                  },
+                );
+              },
+            ),
+            SizedBox(height: 20),
+            // Tutoring button
+            Center(
+              child: ElevatedButton(
+                onPressed: () {
+                  // Handle tutoring button pressed
+                },
+                style: ButtonStyle(
+                  backgroundColor: MaterialStateProperty.all<Color>(Colors.blue), // Set button background color
+                ),
+                child: Text('Tutoring'),
+              ),
+            ),
+          ],
+        ),
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        items: [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home, color: Colors.blue),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.chat, color: Colors.green),
+            label: 'Chat',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.notifications, color: Colors.red),
+            label: 'Notifications',
+          ),
+        ],
+        onTap: (index) {
+          // Handle bottom navigation tap
+        },
+      ),
+    );
+  }
+}
