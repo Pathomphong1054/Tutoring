@@ -1,16 +1,25 @@
+import 'package:apptutor_project/ChatListScreen.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-
+import 'StudentProfileScreen.dart';
 import 'TutorProfileScreen.dart';
 import 'chat_screen.dart';
 import 'notification_screen.dart';
 import 'selection_screen.dart';
+import 'SubjectCategoryScreen.dart';
 
 class HomePage2 extends StatefulWidget {
   final String userName;
+  final String userRole;
+  final String profileImageUrl;
 
-  const HomePage2({Key? key, required this.userName}) : super(key: key);
+  const HomePage2({
+    Key? key,
+    required this.userName,
+    required this.userRole,
+    required this.profileImageUrl,
+  }) : super(key: key);
 
   @override
   _HomePage2State createState() => _HomePage2State();
@@ -18,25 +27,124 @@ class HomePage2 extends StatefulWidget {
 
 class _HomePage2State extends State<HomePage2> {
   List<dynamic> tutors = [];
+  List<dynamic> filteredTutors = [];
+  List<dynamic> messages = [];
+  bool isLoading = false;
+  String? _profileImageUrl;
+  String? _userName;
+  String searchQuery = '';
 
   @override
   void initState() {
     super.initState();
-    _fetchTutors();
+    _userName = widget.userName;
+    _profileImageUrl = widget.profileImageUrl;
+    if (widget.userRole == 'student') {
+      _fetchTutors();
+    }
+    _fetchProfileImage();
+    _fetchMessages();
   }
 
   Future<void> _fetchTutors() async {
-    var url = Uri.parse('http://192.168.207.193/tutoring_app/fetch_tutors.php');
-    var response = await http.get(url);
+    setState(() {
+      isLoading = true;
+    });
+    var url = Uri.parse('http://10.5.50.84/tutoring_app/fetch_tutors.php');
+    try {
+      var response = await http.get(url);
 
-    if (response.statusCode == 200) {
-      var data = json.decode(response.body);
+      if (response.statusCode == 200) {
+        var data = json.decode(response.body);
+        setState(() {
+          tutors = data['tutors'];
+          _filterTutors();
+        });
+      } else {
+        _showErrorSnackBar('Failed to load tutors');
+      }
+    } catch (e) {
+      _showErrorSnackBar('An error occurred while fetching tutors');
+    } finally {
       setState(() {
-        tutors = data['tutors'];
+        isLoading = false;
       });
-    } else {
-      print('Failed to load tutors');
     }
+  }
+
+  void _filterTutors() {
+    setState(() {
+      filteredTutors = tutors.where((tutor) {
+        final name = tutor['name'] ?? '';
+        final subject = tutor['subject'] ?? '';
+        final category = tutor['category'] ?? '';
+        final topic = tutor['topic'] ?? '';
+        final query = searchQuery.toLowerCase();
+        return name.toLowerCase().contains(query) ||
+            subject.toLowerCase().contains(query) ||
+            category.toLowerCase().contains(query) ||
+            topic.toLowerCase().contains(query);
+      }).toList();
+    });
+  }
+
+  Future<void> _fetchProfileImage() async {
+    var url = Uri.parse(
+        'http://10.5.50.84/tutoring_app/get_user_profile.php?username=${_userName}&role=${widget.userRole}');
+    try {
+      var response = await http.get(url);
+      if (response.statusCode == 200) {
+        var data = json.decode(response.body);
+        if (data['status'] == 'success') {
+          setState(() {
+            _profileImageUrl = data['profile_image'];
+            _userName = data['name'];
+          });
+        } else {
+          _showErrorSnackBar(
+              'Failed to load profile image: ${data['message']}');
+        }
+      } else {
+        _showErrorSnackBar(
+            'Failed to load profile image: ${response.reasonPhrase}');
+      }
+    } catch (e) {
+      _showErrorSnackBar('An error occurred while fetching profile image: $e');
+    }
+  }
+
+  Future<void> _fetchMessages() async {
+    setState(() {
+      isLoading = true;
+    });
+    var url = Uri.parse('http://10.5.50.84/tutoring_app/fetch_messages.php');
+    try {
+      var response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        var data = json.decode(response.body);
+        setState(() {
+          messages = data['messages'];
+        });
+      } else {
+        _showErrorSnackBar('Failed to load messages');
+      }
+    } catch (e) {
+      _showErrorSnackBar('An error occurred while fetching messages');
+    } finally {
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _onProfileUpdated() {
+    _fetchProfileImage();
   }
 
   @override
@@ -46,213 +154,425 @@ class _HomePage2State extends State<HomePage2> {
         title: Text('Home'),
         backgroundColor: Colors.blue[800],
       ),
-      drawer: Drawer(
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: <Widget>[
-            UserAccountsDrawerHeader(
-              accountName: widget.userName.isNotEmpty
-                  ? Text(widget.userName)
-                  : Text('User'), // แสดงชื่อผู้ใช้
-              currentAccountPicture: GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (context) =>
-                            TutorProfileScreen(userName: widget.userName)),
-                  );
-                },
-                child: CircleAvatar(
-                  backgroundImage:
-                      NetworkImage('https://example.com/apptutor.png'),
-                ),
-              ),
-              decoration: BoxDecoration(
-                color: Colors.blue[800],
-              ),
-              accountEmail: null,
-            ),
-            ListTile(
-              leading: Icon(Icons.settings),
-              title: Text('Settings'),
-              onTap: () {
-                // Handle Settings tap
-              },
-            ),
-            ListTile(
-              leading: Icon(Icons.class_),
-              title: Text('My Class'),
-              onTap: () {
-                // Handle My Class tap
-              },
-            ),
-            ListTile(
-              leading: Icon(Icons.logout),
-              title: Text('Log Out'),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => SelectionScreen()),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Colors.blue[200]!,
-              Colors.blue[50]!,
-            ],
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Search TextField
-              TextField(
-                decoration: InputDecoration(
-                  prefixIcon: Icon(Icons.search, color: Colors.blue),
-                  hintText: 'Search by name',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8.0),
-                  ),
-                  filled: true,
-                  fillColor: Colors.white,
-                ),
-              ),
-              SizedBox(height: 20),
-              // Subject Categories
-              Text(
-                'Subject Categories',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: const Color.fromARGB(255, 0, 0, 0),
-                ),
-              ),
-              SizedBox(height: 10),
-              // Horizontal Scroll of Category Icons
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _buildCategoryIcon(Icons.book, 'Thai language', Colors.red),
-                    _buildCategoryIcon(Icons.language, 'English', Colors.green),
-                    _buildCategoryIcon(Icons.calculate, 'Math', Colors.blue),
-                    _buildCategoryIcon(Icons.science, 'Physics', Colors.orange),
-                    _buildCategoryIcon(
-                        Icons.biotech, 'Chemistry', Colors.purple),
-                    _buildCategoryIcon(Icons.eco, 'Biology', Colors.brown),
-                    _buildCategoryIcon(Icons.space_bar, 'Science', Colors.cyan),
-                  ],
-                ),
-              ),
-              SizedBox(height: 20),
-              // Recommended Tutors
-              Text(
-                'Recommended Tutors',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: const Color.fromARGB(255, 0, 0, 0),
-                ),
-              ),
-              SizedBox(height: 10),
-              // ListView of Tutor Cards
-              Expanded(
-                child: ListView.builder(
-                  itemCount: tutors.length,
-                  itemBuilder: (context, index) {
-                    return _buildTutorCard(
-                      tutors[index]['name'] ?? 'No Name',
-                      tutors[index]['subject'] ?? 'No Subject',
-                      tutors[index]['profile_images'] ??
-                          'https://example.com/apptutor.png',
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        items: [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home, color: Colors.blue),
-            label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.chat, color: Colors.green),
-            label: 'Chat',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.notifications, color: Colors.red),
-            label: 'Notifications',
+      drawer: _buildDrawer(),
+      body: Column(
+        children: [
+          _buildSearchField(),
+          _buildCommonSection(),
+          Expanded(
+            child: widget.userRole == 'student'
+                ? _buildStudentBody()
+                : _buildTutorBody(),
           ),
         ],
-        onTap: (index) {
-          switch (index) {
-            case 0:
-              // Handle Home tap
-              break;
-            case 1:
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => ChatScreen()),
-              );
-              break;
-            case 2:
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => NotificationScreen()),
-              );
-              break;
-          }
+      ),
+      bottomNavigationBar: _buildBottomNavigationBar(),
+    );
+  }
+
+  Widget _buildDrawer() {
+    return Drawer(
+      child: ListView(
+        padding: EdgeInsets.zero,
+        children: <Widget>[
+          UserAccountsDrawerHeader(
+            accountName: _userName != null && _userName!.isNotEmpty
+                ? Text(_userName!, style: TextStyle(fontSize: 20))
+                : Text('User', style: TextStyle(fontSize: 20)),
+            accountEmail: Text(widget.userRole, style: TextStyle(fontSize: 16)),
+            currentAccountPicture: GestureDetector(
+              onTap: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => widget.userRole == 'student'
+                        ? StudentProfileScreen(
+                            userName: _userName!,
+                            onProfileUpdated: _onProfileUpdated,
+                          )
+                        : TutorProfileScreen(
+                            userName: _userName!,
+                            onProfileUpdated: _onProfileUpdated,
+                            canEdit: true,
+                            userRole: 'tutor',
+                          ),
+                  ),
+                );
+                _onProfileUpdated();
+              },
+              child: CircleAvatar(
+                backgroundImage: _profileImageUrl != null &&
+                        _profileImageUrl!.isNotEmpty
+                    ? NetworkImage(
+                        'http://10.5.50.84/tutoring_app/uploads/$_profileImageUrl')
+                    : AssetImage('images/default_profile.jpg') as ImageProvider,
+              ),
+            ),
+            decoration: BoxDecoration(
+              color: Colors.blue[800],
+            ),
+          ),
+          ListTile(
+            leading: Icon(Icons.settings),
+            title: Text('Settings', style: TextStyle(fontSize: 18)),
+            onTap: () {},
+          ),
+          if (widget.userRole == 'tutor')
+            ListTile(
+              leading: Icon(Icons.class_),
+              title: Text('My Class', style: TextStyle(fontSize: 18)),
+              onTap: () {},
+            ),
+          ListTile(
+            leading: Icon(Icons.logout),
+            title: Text('Log Out', style: TextStyle(fontSize: 18)),
+            onTap: () {
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (context) => SelectionScreen()));
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchField() {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: TextField(
+        decoration: InputDecoration(
+          prefixIcon: Icon(Icons.search, color: Colors.blue),
+          hintText: 'Search by name, subject, category, or topic',
+          hintStyle: TextStyle(fontSize: 18),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8.0),
+          ),
+          filled: true,
+          fillColor: Colors.white,
+        ),
+        onChanged: (query) {
+          setState(() {
+            searchQuery = query;
+            _filterTutors();
+          });
         },
       ),
     );
   }
 
-  Widget _buildCategoryIcon(IconData icon, String label, Color color) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-      child: Column(
-        children: [
-          CircleAvatar(
-            backgroundColor: color.withOpacity(0.2),
-            child: Icon(icon, size: 40, color: color),
-            radius: 40,
+  Widget _buildCommonSection() {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: Text(
+            'Subject Categories',
+            style: TextStyle(
+                fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black),
           ),
-          SizedBox(height: 5),
-          Text(label,
-              style: TextStyle(color: const Color.fromARGB(255, 0, 0, 0))),
-        ],
+        ),
+        SizedBox(height: 10),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              _buildCategoryIcon(Icons.language, 'Language', Colors.red),
+              _buildCategoryIcon(Icons.calculate, 'Mathematics', Colors.green),
+              _buildCategoryIcon(Icons.science, 'Science', Colors.blue),
+              _buildCategoryIcon(
+                  Icons.computer, 'Computer Science', Colors.orange),
+              _buildCategoryIcon(Icons.business, 'Business', Colors.purple),
+              _buildCategoryIcon(Icons.art_track, 'Arts', Colors.pink),
+              _buildCategoryIcon(
+                  Icons.sports, 'Physical Education', Colors.teal),
+            ],
+          ),
+        ),
+        SizedBox(height: 20),
+      ],
+    );
+  }
+
+  Widget _buildCategoryIcon(IconData icon, String label, Color color) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => SubjectCategoryScreen(
+              category: label,
+              userName: widget.userName,
+              userRole: widget.userRole,
+              profileImageUrl: widget.profileImageUrl,
+            ),
+          ),
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+        child: Column(
+          children: [
+            CircleAvatar(
+              backgroundColor: color.withOpacity(0.2),
+              child: Icon(icon, size: 40, color: color),
+              radius: 40,
+            ),
+            SizedBox(height: 5),
+            Text(label, style: TextStyle(color: Colors.black, fontSize: 18)),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildTutorCard(String name, String subjects, String imageUrl) {
+  Widget _buildStudentBody() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: Text(
+            'Recommended Tutors',
+            style: TextStyle(
+                fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black),
+          ),
+        ),
+        SizedBox(height: 10),
+        isLoading
+            ? Center(child: CircularProgressIndicator())
+            : Expanded(
+                child: ListView.builder(
+                  itemCount: filteredTutors.length,
+                  itemBuilder: (context, index) {
+                    final tutor = filteredTutors[index];
+                    final name = tutor['name'] ?? 'No Name';
+                    final category = tutor['category'] ?? 'No Category';
+                    final subject = tutor['subject'] ?? 'No Subject';
+                    final profileImageUrl = tutor['profile_images'] != null &&
+                            tutor['profile_images'].isNotEmpty
+                        ? 'http://10.5.50.84/tutoring_app/uploads/' +
+                            tutor['profile_images']
+                        : 'images/default_profile.jpg';
+                    final username = tutor['name'] ?? 'No Username';
+
+                    return GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => TutorProfileScreen(
+                              userName: username,
+                              userRole: 'Tutor',
+                              canEdit: false,
+                              onProfileUpdated: () {},
+                            ),
+                          ),
+                        );
+                      },
+                      child: Card(
+                        color: Colors.white.withOpacity(0.8),
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundImage: profileImageUrl.contains('http')
+                                ? NetworkImage(profileImageUrl)
+                                : AssetImage(profileImageUrl) as ImageProvider,
+                          ),
+                          title: Text(name,
+                              style:
+                                  TextStyle(color: Colors.black, fontSize: 18)),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Subjects: $subject',
+                                  style: TextStyle(
+                                      color: Colors.black, fontSize: 16)),
+                              Text('Category: $category',
+                                  style: TextStyle(
+                                      color: Colors.black, fontSize: 16)),
+                            ],
+                          ),
+                          trailing: Icon(Icons.star, color: Colors.yellow),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+      ],
+    );
+  }
+
+  Widget _buildTutorBody() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Text(
+              'Welcome, ${_userName}!',
+              style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black),
+            ),
+          ),
+        ),
+        SizedBox(height: 10),
+        Center(
+          child: Text(
+            'You are logged in as a ${widget.userRole}.',
+            style: TextStyle(fontSize: 18, color: Colors.blue[800]),
+            textAlign: TextAlign.center,
+          ),
+        ),
+        SizedBox(height: 20),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: Text(
+            'Post_Messages',
+            style: TextStyle(
+                fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black),
+          ),
+        ),
+        SizedBox(height: 10),
+        isLoading
+            ? Center(child: CircularProgressIndicator())
+            : Expanded(
+                child: ListView.builder(
+                  itemCount: messages.length,
+                  itemBuilder: (context, index) {
+                    final message = messages[index];
+                    final userName = message['userName'] ?? '';
+                    final userImageUrl = message['profileImageUrl'] != null &&
+                            message['profileImageUrl'].isNotEmpty
+                        ? 'http://10.5.50.84/tutoring_app/uploads/' +
+                            message['profileImageUrl']
+                        : 'images/default_profile.jpg';
+                    final messageText = message['message'] ?? '';
+                    final startDate = message['startDate'] ?? '';
+                    final endDate = message['endDate'] ?? '';
+                    final startTime = message['startTime'] ?? '';
+                    final endTime = message['endTime'] ?? '';
+
+                    return _buildMessageCard(
+                      userName,
+                      userImageUrl,
+                      messageText,
+                      startDate,
+                      endDate,
+                      startTime,
+                      endTime,
+                    );
+                  },
+                ),
+              ),
+      ],
+    );
+  }
+
+  Widget _buildTutorCard(String name, String subjects, String category,
+      String topic, String imageUrl) {
     return Card(
       color: Colors.white.withOpacity(0.8),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundImage: NetworkImage(imageUrl),
+          backgroundImage: imageUrl.contains('http')
+              ? NetworkImage(imageUrl)
+              : AssetImage(imageUrl) as ImageProvider,
         ),
-        title: Text(name,
-            style: TextStyle(color: const Color.fromARGB(255, 0, 0, 0))),
-        subtitle: Text('Subjects: $subjects',
-            style: TextStyle(color: const Color.fromARGB(255, 0, 0, 0))),
+        title: Text(name, style: TextStyle(color: Colors.black, fontSize: 18)),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Subjects: $subjects',
+                style: TextStyle(color: Colors.black, fontSize: 16)),
+            Text('Category: $category',
+                style: TextStyle(color: Colors.black, fontSize: 16)),
+            Text('Topic: $topic',
+                style: TextStyle(color: Colors.black, fontSize: 16)),
+          ],
+        ),
         trailing: Icon(Icons.star, color: Colors.yellow),
       ),
+    );
+  }
+
+  Widget _buildMessageCard(
+      String userName,
+      String userImageUrl,
+      String messageText,
+      String startDate,
+      String endDate,
+      String startTime,
+      String endTime) {
+    return Card(
+      color: Colors.white.withOpacity(0.8),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundImage: userImageUrl.contains('http')
+              ? NetworkImage(userImageUrl)
+              : AssetImage(userImageUrl) as ImageProvider,
+        ),
+        title:
+            Text(userName, style: TextStyle(color: Colors.black, fontSize: 18)),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(messageText,
+                style: TextStyle(color: Colors.black, fontSize: 16)),
+            Text('Start Date: $startDate',
+                style: TextStyle(color: Colors.black, fontSize: 14)),
+            Text('End Date: $endDate',
+                style: TextStyle(color: Colors.black, fontSize: 14)),
+            Text('Start Time: $startTime',
+                style: TextStyle(color: Colors.black, fontSize: 14)),
+            Text('End Time: $endTime',
+                style: TextStyle(color: Colors.black, fontSize: 14)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomNavigationBar() {
+    return BottomNavigationBar(
+      items: [
+        BottomNavigationBarItem(
+            icon: Icon(Icons.home, color: Colors.blue), label: 'Home'),
+        BottomNavigationBarItem(
+            icon: Icon(Icons.chat, color: Colors.green), label: 'Chat'),
+        BottomNavigationBarItem(
+            icon: Icon(Icons.notifications, color: Colors.red),
+            label: 'Notifications'),
+      ],
+      onTap: (index) {
+        switch (index) {
+          case 0:
+            // Handle Home tap
+            break;
+          case 1:
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ChatListScreen(
+                  currentUser: widget.userName,
+                  recipient:
+                      'recipient_username', // Replace with actual recipient usernam // Pass initial message if any
+                  recipientImage:
+                      'recipient_image_url', // Replace with actual recipient image URL
+                  currentUserImage:
+                      widget.profileImageUrl, // Current user's image URL
+                ),
+              ),
+            );
+            break;
+          case 2:
+            Navigator.push(context,
+                MaterialPageRoute(builder: (context) => NotificationScreen()));
+            break;
+        }
+      },
     );
   }
 }

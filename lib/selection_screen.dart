@@ -1,5 +1,3 @@
-import 'package:apptutor_project/StudentProfileScreen.dart';
-import 'package:apptutor_project/TutorProfileScreen.dart';
 import 'package:apptutor_project/registration/LoginScreen_student.dart';
 import 'package:apptutor_project/registration/LoginScreen_tutor.dart';
 
@@ -29,14 +27,11 @@ class SelectionScreen extends StatelessWidget {
             _buildOptionCard(
               context,
               'Register as Tutor',
-              'images/apptutor.png',
+              'images/Tutor.webp',
               () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
-                      //builder: (context) => TutorRegistrationScreen()),
-                      builder: (context) => LoginScreen()),
-                  //builder: (context) => TutorProfileScreen()),
+                  MaterialPageRoute(builder: (context) => LoginScreen_tutor()),
                 );
               },
             ),
@@ -44,14 +39,11 @@ class SelectionScreen extends StatelessWidget {
             _buildOptionCard(
               context,
               'Register as Student',
-              'images/apptutor.png',
+              'images/Student.webp',
               () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
-                      //builder: (context) => StudentRegistrationScreen()),
-                      builder: (context) => LoginScreen_student()),
-                      //builder: (context) => StudentProfileScreen()),
+                  MaterialPageRoute(builder: (context) => LoginScreenStudent()),
                 );
               },
             ),
@@ -71,7 +63,7 @@ class SelectionScreen extends StatelessWidget {
       onTap: onTap,
       child: Container(
         width: 250,
-        height: 250,
+        height: 300, 
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(15),
@@ -94,8 +86,8 @@ class SelectionScreen extends StatelessWidget {
             children: [
               Image.asset(
                 imagePath,
-                width: 100,
-                height: 100,
+                width: 200, 
+                height: 200, 
                 fit: BoxFit.cover,
               ),
               SizedBox(height: 15),

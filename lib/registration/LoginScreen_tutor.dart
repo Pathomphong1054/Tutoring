@@ -1,25 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import '../home_pagetutor.dart'; // Adjust this import based on your actual file structure
-import 'package:apptutor_project/registration/tutor_registration_screen.dart';
+import '../home_pagetutor.dart';
+import 'tutor_registration_screen.dart';
 
-class LoginScreen extends StatefulWidget {
+class LoginScreen_tutor extends StatefulWidget {
   @override
   _LoginScreenState createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen_tutor> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _usernameController = TextEditingController();
 
   Future<void> login(BuildContext context) async {
     final String email = _emailController.text;
     final String password = _passwordController.text;
 
     final response = await http.post(
-      Uri.parse('http://192.168.207.193/tutoring_app/login.php'),
+      Uri.parse('http://10.5.50.84/tutoring_app/login.php'),
       body: {
         'email': email,
         'password': password,
@@ -28,19 +27,29 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (response.statusCode == 200) {
       final responseData = json.decode(response.body);
-      print(responseData); // Print responseData for debugging
+      print(responseData);
       if (responseData['status'] == 'success') {
-        String? userName = responseData['name']; // Use nullable type
-        if (userName != null) {
+        String? userName = responseData['name'];
+        String? userRole = responseData['role'];
+        String profileImageUrl = responseData['profile_image'] != null
+            ? 'http://10.5.50.84/tutoring_app/uploads/' +
+                responseData['profile_image']
+            : 'images/default_profile.jpg';
+
+        if (userName != null && userRole != null) {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
-              builder: (context) => HomePage2(userName: userName),
+              builder: (context) => HomePage2(
+                userName: userName,
+                userRole: userRole,
+                profileImageUrl: profileImageUrl,
+              ),
             ),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('User name is null')),
+            SnackBar(content: Text('User name or role is null')),
           );
         }
       } else {
@@ -59,7 +68,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Login'),
+        title: Text('Tutor Login'),
       ),
       body: Padding(
         padding: EdgeInsets.all(16.0),
@@ -74,7 +83,7 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 Center(
                   child: Image.asset(
-                    'images/apptutor.png', // Adjust path based on your project structure
+                    'images/apptutor.png',
                     height: 450,
                     width: 450,
                     fit: BoxFit.contain,
