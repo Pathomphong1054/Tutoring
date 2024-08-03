@@ -1,7 +1,7 @@
-import 'package:apptutor_project/TutoringScheduleScreen';
-import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'dart:io';
+import 'package:apptutor_project/TutoringScheduleScreen';
+import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 
@@ -10,6 +10,8 @@ class TutorProfileScreen extends StatefulWidget {
   final String userRole;
   final VoidCallback? onProfileUpdated;
   final bool canEdit;
+  final String currentUser;
+  final String currentUserImage;
 
   const TutorProfileScreen({
     Key? key,
@@ -17,6 +19,8 @@ class TutorProfileScreen extends StatefulWidget {
     required this.userRole,
     this.onProfileUpdated,
     this.canEdit = false,
+    required this.currentUser,
+    required this.currentUserImage, required String username, required String profileImageUrl,
   }) : super(key: key);
 
   @override
@@ -50,7 +54,7 @@ class _TutorProfileScreenState extends State<TutorProfileScreen> {
 
     try {
       final url = Uri.parse(
-        'http://10.5.50.84/tutoring_app/get_tutor_profile.php?username=${widget.userName}',
+        'http://192.168.92.173/tutoring_app/get_tutor_profile.php?username=${widget.userName}',
       );
       print('Fetching profile for username: ${widget.userName}');
       final response = await http.get(url);
@@ -112,7 +116,7 @@ class _TutorProfileScreenState extends State<TutorProfileScreen> {
     try {
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('http://10.5.50.84/tutoring_app/upload_profile_image.php'),
+        Uri.parse('http://192.168.92.173/tutoring_app/upload_profile_image.php'),
       );
       request.files.add(
         await http.MultipartFile.fromPath(
@@ -159,7 +163,7 @@ class _TutorProfileScreenState extends State<TutorProfileScreen> {
     try {
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('http://10.5.50.84/tutoring_app/upload_resume.php'),
+        Uri.parse('http://192.168.92.173/tutoring_app/upload_resume.php'),
       );
       request.files.add(
         await http.MultipartFile.fromPath(
@@ -210,7 +214,7 @@ class _TutorProfileScreenState extends State<TutorProfileScreen> {
     try {
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('http://10.5.50.84/tutoring_app/update_tutor_profile.php'),
+        Uri.parse('http://192.168.92.173/tutoring_app/update_tutor_profile.php'),
       );
 
       if (_profileImage != null) {
@@ -295,7 +299,7 @@ class _TutorProfileScreenState extends State<TutorProfileScreen> {
                                 ? FileImage(_profileImage!)
                                 : (_profileImageUrl != null
                                     ? NetworkImage(
-                                        'http://10.5.50.84/tutoring_app/uploads/$_profileImageUrl')
+                                        'http://192.168.92.173/tutoring_app/uploads/$_profileImageUrl')
                                     : AssetImage('images/default_profile.jpg')
                                         as ImageProvider),
                             child: Align(
@@ -324,6 +328,8 @@ class _TutorProfileScreenState extends State<TutorProfileScreen> {
                                     tutorName: widget.userName,
                                     tutorImage: _profileImageUrl ??
                                         'images/default_profile.jpg',
+                                    currentUser: widget.currentUser,
+                                    currentUserImage: widget.currentUserImage,
                                   ),
                                 ),
                               );
@@ -427,7 +433,7 @@ class _TutorProfileScreenState extends State<TutorProfileScreen> {
           SizedBox(height: 10),
           _resumeImageUrl != null
               ? Image.network(
-                  'http://10.5.50.84/tutoring_app/uploads/$_resumeImageUrl')
+                  'http://192.168.92.173/tutoring_app/uploads/$_resumeImageUrl')
               : Text(
                   'No resume uploaded',
                   style: TextStyle(

@@ -1,15 +1,17 @@
+import 'package:apptutor_project/registration/tutor_password_reset_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../home_pagetutor.dart';
 import 'tutor_registration_screen.dart';
 
-class LoginScreen_tutor extends StatefulWidget {
+
+class LoginScreenTutor extends StatefulWidget {
   @override
-  _LoginScreenState createState() => _LoginScreenState();
+  _LoginScreenTutorState createState() => _LoginScreenTutorState();
 }
 
-class _LoginScreenState extends State<LoginScreen_tutor> {
+class _LoginScreenTutorState extends State<LoginScreenTutor> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
@@ -18,7 +20,7 @@ class _LoginScreenState extends State<LoginScreen_tutor> {
     final String password = _passwordController.text;
 
     final response = await http.post(
-      Uri.parse('http://10.5.50.84/tutoring_app/login.php'),
+      Uri.parse('http://192.168.92.173/tutoring_app/login.php'),
       body: {
         'email': email,
         'password': password,
@@ -27,31 +29,24 @@ class _LoginScreenState extends State<LoginScreen_tutor> {
 
     if (response.statusCode == 200) {
       final responseData = json.decode(response.body);
-      print(responseData);
       if (responseData['status'] == 'success') {
-        String? userName = responseData['name'];
-        String? userRole = responseData['role'];
+        String userName = responseData['name'];
+        String userRole = responseData['role'];
         String profileImageUrl = responseData['profile_image'] != null
-            ? 'http://10.5.50.84/tutoring_app/uploads/' +
+            ? 'http://192.168.92.173/tutoring_app/uploads/' +
                 responseData['profile_image']
             : 'images/default_profile.jpg';
 
-        if (userName != null && userRole != null) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => HomePage2(
-                userName: userName,
-                userRole: userRole,
-                profileImageUrl: profileImageUrl,
-              ),
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => HomePage2(
+              userName: userName,
+              userRole: userRole,
+              profileImageUrl: profileImageUrl,
             ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('User name or role is null')),
-          );
-        }
+          ),
+        );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(responseData['message'])),
@@ -84,8 +79,8 @@ class _LoginScreenState extends State<LoginScreen_tutor> {
                 Center(
                   child: Image.asset(
                     'images/apptutor.png',
-                    height: 450,
-                    width: 450,
+                    height: 150,
+                    width: 150,
                     fit: BoxFit.contain,
                   ),
                 ),
@@ -152,6 +147,22 @@ class _LoginScreenState extends State<LoginScreen_tutor> {
                         color: Theme.of(context).primaryColor,
                       ),
                     ),
+                  ),
+                ),
+                SizedBox(height: 10),
+                Center(
+                  child: TextButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ResetPasswordScreen(
+                            userRole: 'tutor',
+                          ),
+                        ),
+                      );
+                    },
+                    child: Text('Forgot Password? Reset here'),
                   ),
                 ),
               ],

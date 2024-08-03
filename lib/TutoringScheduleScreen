@@ -7,8 +7,15 @@ import 'chat_screen.dart';
 class TutoringScheduleScreen extends StatefulWidget {
   final String tutorName;
   final String tutorImage;
+  final String currentUser;
+  final String currentUserImage;
 
-  TutoringScheduleScreen({required this.tutorName, required this.tutorImage});
+  TutoringScheduleScreen({
+    required this.tutorName,
+    required this.tutorImage,
+    required this.currentUser,
+    required this.currentUserImage,
+  });
 
   @override
   _TutoringScheduleScreenState createState() => _TutoringScheduleScreenState();
@@ -19,17 +26,46 @@ class _TutoringScheduleScreenState extends State<TutoringScheduleScreen> {
   TimeOfDay? startTime;
   TimeOfDay? endTime;
   int selectedRate = 1;
+  String selectedLevel = 'ประถม1-3';
   TextEditingController startTimeController = TextEditingController();
   TextEditingController endTimeController = TextEditingController();
+  double hourlyRate = 100.0;
 
-  List<Map<String, dynamic>> rates = [
-    {'people': 1, 'price': 200},
-    {'people': 2, 'price': 500},
-    {'people': 3, 'price': 700}
-  ];
+  List<Map<String, dynamic>> rates = [];
 
   CalendarFormat _calendarFormat = CalendarFormat.month;
   DateTime _focusedDay = DateTime.now();
+  List<Map<String, dynamic>> _scheduledSessions = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchScheduledSessions();
+    _updateRates();
+  }
+
+  Future<void> _fetchScheduledSessions() async {
+    final response = await http.get(
+      Uri.parse('http://192.168.92.173/tutoring_app/fetch_scheduled_sessions.php?tutor=${widget.tutorName}'),
+    );
+
+    if (response.statusCode == 200) {
+      final responseData = json.decode(response.body);
+      if (responseData['status'] == 'success') {
+        setState(() {
+          _scheduledSessions = List<Map<String, dynamic>>.from(responseData['sessions']);
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load scheduled sessions: ${responseData['message']}')),
+        );
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load scheduled sessions: ${response.body}')),
+      );
+    }
+  }
 
   Future<void> _selectTime(BuildContext context, bool isStartTime) async {
     final timePicked = await showTimePicker(
@@ -46,6 +82,57 @@ class _TutoringScheduleScreenState extends State<TutoringScheduleScreen> {
           endTime = timePicked;
           endTimeController.text = endTime!.format(context);
         }
+        _updateRates();
+      });
+    }
+  }
+
+  bool _isDayScheduled(DateTime day) {
+    for (var session in _scheduledSessions) {
+      if (isSameDay(DateTime.parse(session['date']), day)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void _updateRates() {
+    if (startTime != null && endTime != null) {
+      final startMinutes = startTime!.hour * 60 + startTime!.minute;
+      final endMinutes = endTime!.hour * 60 + endTime!.minute;
+      final durationMinutes = endMinutes - startMinutes;
+      final durationHours = (durationMinutes / 60).ceil();
+      double baseRate;
+      switch (selectedLevel) {
+        case 'ประถม1-3':
+          baseRate = 100.0;
+          break;
+        case 'ประถม4-6':
+          baseRate = 120.0;
+          break;
+        case 'มัธยม1-3':
+          baseRate = 140.0;
+          break;
+        case 'มัธยม4-6':
+          baseRate = 160.0;
+          break;
+        case 'ปวช':
+          baseRate = 180.0;
+          break;
+        case 'ปวส':
+          baseRate = 200.0;
+          break;
+        case 'ป.ตรี':
+        default:
+          baseRate = 180.0;
+          break;
+      }
+      setState(() {
+        rates = [
+          {'people': 1, 'price': durationHours * baseRate},
+          {'people': 2, 'price': durationHours * baseRate * 2},
+          {'people': 3, 'price': durationHours * baseRate * 3},
+        ];
       });
     }
   }
@@ -53,10 +140,10 @@ class _TutoringScheduleScreenState extends State<TutoringScheduleScreen> {
   Future<void> _scheduleSession() async {
     if (selectedDay != null && startTime != null && endTime != null) {
       final response = await http.post(
-        Uri.parse('http://10.5.50.84/tutoring_app/schedule_session.php'),
+        Uri.parse('http://192.168.92.173/tutoring_app/schedule_session.php'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
-          'student': 'student1', // Replace with actual student username
+          'student': widget.currentUser,
           'tutor': widget.tutorName,
           'date': selectedDay.toString(),
           'startTime': startTime!.format(context),
@@ -68,17 +155,21 @@ class _TutoringScheduleScreenState extends State<TutoringScheduleScreen> {
       print('Schedule Session Response: ${response.body}');
 
       if (response.statusCode == 200) {
-        final responseData = json.decode(response.body);
-        if (responseData['status'] == 'success') {
+        try {
+          final responseData = json.decode(response.body);
+          if (responseData['status'] == 'success') {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Session scheduled successfully')),
+            );
+            await _sendMessageToTutor(responseData['session_id'].toString()); // Send message to tutor with session_id
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Failed to schedule session: ${responseData['message']}')),
+            );
+          }
+        } catch (e) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Session scheduled successfully')),
-          );
-          // Send message to tutor
-          await _sendMessageToTutor();
-          Navigator.pop(context); // Go back after scheduling
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to schedule session: ${responseData['message']}')),
+            SnackBar(content: Text('Failed to parse response: $e')),
           );
         }
       } else {
@@ -93,42 +184,58 @@ class _TutoringScheduleScreenState extends State<TutoringScheduleScreen> {
     }
   }
 
-  Future<void> _sendMessageToTutor() async {
-    final message = 'A new tutoring session has been scheduled with you on ${selectedDay.toString()} from ${startTime!.format(context)} to ${endTime!.format(context)}.';
+  Future<void> _sendMessageToTutor(String sessionId) async {
+    final price = rates.firstWhere((rate) => rate['people'] == selectedRate)['price'];
+    final message = '''A new tutoring session has been scheduled with you on ${selectedDay.toString()}
+    from ${startTime!.format(context)} to ${endTime!.format(context)}.
+    The rate is $selectedRate people at ${price.toStringAsFixed(2)} THB.''';
+
+    final payload = json.encode({
+      'sender': widget.currentUser,
+      'recipient': widget.tutorName,
+      'message': message,
+      'session_id': sessionId,
+    });
+
+    print('Sending message payload: $payload');
 
     final response = await http.post(
-      Uri.parse('http://10.5.50.84/tutoring_app/send_message.php'),
+      Uri.parse('http://192.168.92.173/tutoring_app/send_message.php'),
       headers: {'Content-Type': 'application/json'},
-      body: json.encode({
-        'sender': 'student1', // Replace with actual student username
-        'recipient': widget.tutorName,
-        'message': message,
-      }),
+      body: payload,
     );
 
     print('Send Message Response: ${response.body}');
 
     if (response.statusCode == 200) {
-      final responseData = json.decode(response.body);
-      if (responseData['status'] == 'success') {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Message sent to tutor')),
-        );
-        // Navigate to ChatScreen with the tutor
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ChatScreen(
-              currentUser: 'student1', // Replace with actual student username
-              recipient: widget.tutorName,
-              recipientImage: widget.tutorImage,
-              currentUserImage: 'path_to_student_image', // Replace with actual student image path
+      try {
+        final responseData = json.decode(response.body);
+        if (responseData['status'] == 'success') {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Message sent to tutor')),
+          );
+          // Navigate to ChatScreen with the tutor
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ChatScreen(
+                currentUser: widget.currentUser,
+                recipient: widget.tutorName,
+                recipientImage: widget.tutorImage,
+                currentUserImage: widget.currentUserImage,
+                sessionId: sessionId,
+                currentUserRole: 'student', // Pass currentUserRole as 'student'
+              ),
             ),
-          ),
-        );
-      } else {
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to send message: ${responseData['message']}')),
+          );
+        }
+      } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to send message: ${responseData['message']}')),
+          SnackBar(content: Text('Failed to parse response: $e')),
         );
       }
     } else {
@@ -150,7 +257,7 @@ class _TutoringScheduleScreenState extends State<TutoringScheduleScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Tutor: ${widget.tutorName}'), // Display tutor name
+            Text('Tutor: ${widget.tutorName}'),
             SizedBox(height: 20),
             TableCalendar(
               calendarFormat: _calendarFormat,
@@ -161,13 +268,39 @@ class _TutoringScheduleScreenState extends State<TutoringScheduleScreen> {
                 return isSameDay(selectedDay, day);
               },
               onDaySelected: (selectedDay, focusedDay) {
-                setState(() {
-                  this.selectedDay = selectedDay;
-                });
+                if (_isDayScheduled(selectedDay)) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('This day is already scheduled. Please choose another day.')),
+                  );
+                } else {
+                  setState(() {
+                    this.selectedDay = selectedDay;
+                  });
+                }
               },
               onPageChanged: (focusedDay) {
                 _focusedDay = focusedDay;
               },
+              calendarBuilders: CalendarBuilders(
+                defaultBuilder: (context, day, focusedDay) {
+                  if (_isDayScheduled(day)) {
+                    return Container(
+                      margin: const EdgeInsets.all(6.0),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Text(
+                          '${day.day}',
+                          style: TextStyle().copyWith(color: Colors.white),
+                        ),
+                      ),
+                    );
+                  }
+                  return null;
+                },
+              ),
             ),
             SizedBox(height: 20),
             Row(
@@ -208,6 +341,31 @@ class _TutoringScheduleScreenState extends State<TutoringScheduleScreen> {
               ],
             ),
             SizedBox(height: 10),
+            Text('Level of Education'),
+            DropdownButton<String>(
+              value: selectedLevel,
+              onChanged: (String? newValue) {
+                setState(() {
+                  selectedLevel = newValue!;
+                  _updateRates();
+                });
+              },
+              items: <String>[
+                'ประถม1-3',
+                'ประถม4-6',
+                'มัธยม1-3',
+                'มัธยม4-6',
+                'ปวช',
+                'ปวส',
+                'ป.ตรี',
+              ].map<DropdownMenuItem<String>>((String value) {
+                return DropdownMenuItem<String>(
+                  value: value,
+                  child: Text(value),
+                );
+              }).toList(),
+            ),
+            SizedBox(height: 10),
             Text('Price rate'),
             ListView.builder(
               shrinkWrap: true,
@@ -215,7 +373,7 @@ class _TutoringScheduleScreenState extends State<TutoringScheduleScreen> {
               itemCount: rates.length,
               itemBuilder: (context, index) {
                 return RadioListTile<int>(
-                  title: Text('${rates[index]['people']} คน | ราคา ${rates[index]['price']} บาท'),
+                  title: Text('${rates[index]['people']} คน | ราคา ${rates[index]['price'].toStringAsFixed(2)} บาท'),
                   value: rates[index]['people'],
                   groupValue: selectedRate,
                   onChanged: (int? value) {
@@ -238,25 +396,6 @@ class _TutoringScheduleScreenState extends State<TutoringScheduleScreen> {
             ),
           ],
         ),
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        items: [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home, color: Colors.blue),
-            label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.chat, color: Colors.green),
-            label: 'Chat',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.notifications, color: Colors.red),
-            label: 'Notifications',
-          ),
-        ],
-        onTap: (index) {
-          // Handle tap events
-        },
       ),
     );
   }

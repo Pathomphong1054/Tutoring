@@ -5,8 +5,12 @@ import 'chat_screen.dart';
 
 class ChatListScreen extends StatefulWidget {
   final String currentUser;
+  final String currentUserImage;
 
-  const ChatListScreen({required this.currentUser, required String recipient, required String recipientImage, required String currentUserImage});
+  const ChatListScreen({
+    required this.currentUser,
+    required this.currentUserImage,
+  });
 
   @override
   _ChatListScreenState createState() => _ChatListScreenState();
@@ -14,6 +18,8 @@ class ChatListScreen extends StatefulWidget {
 
 class _ChatListScreenState extends State<ChatListScreen> {
   List<Map<String, dynamic>> _conversations = [];
+  bool _isLoading = true;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -24,23 +30,118 @@ class _ChatListScreenState extends State<ChatListScreen> {
   Future<void> _fetchConversations() async {
     try {
       final response = await http.get(Uri.parse(
-          'http://10.5.50.84/tutoring_app/fetch_conversations.php?user=${widget.currentUser}'));
-      print('Response status: ${response.statusCode}');
-      print('Response body: ${response.body}');
+          'http://192.168.92.173/tutoring_app/fetch_conversations.php?user=${widget.currentUser}'));
       if (response.statusCode == 200) {
-        List<dynamic> conversations = json.decode(response.body);
-        print('Conversations: $conversations');
-        setState(() {
-          _conversations = conversations.cast<Map<String, dynamic>>();
-        });
+        print('Response body: ${response.body}');
+        try {
+          final responseData = json.decode(response.body);
+          if (responseData['status'] == 'success') {
+            final uniqueConversations = responseData['conversations']
+                .map<Map<String, dynamic>>(
+                    (item) => Map<String, dynamic>.from(item))
+                .toList();
+            final seenSessions = <String>{};
+            final filteredConversations =
+                uniqueConversations.where((conversation) {
+              final sessionId = conversation['session_id'].toString();
+              if (seenSessions.contains(sessionId)) {
+                return false;
+              } else {
+                seenSessions.add(sessionId);
+                return true;
+              }
+            }).toList();
+
+            setState(() {
+              _conversations = filteredConversations;
+              _isLoading = false;
+            });
+          } else {
+            throw Exception(
+                'Failed to load conversations: ${responseData['message']}');
+          }
+        } catch (e) {
+          throw Exception('Failed to parse conversations: $e');
+        }
       } else {
-        throw Exception('Failed to load conversations');
+        throw Exception(
+            'Failed to load conversations: ${response.reasonPhrase}');
       }
     } catch (e) {
       print('Error: $e');
+      setState(() {
+        _errorMessage = 'Failed to load conversations: $e';
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<String?> _fetchSessionId(String recipient) async {
+    final response = await http.get(Uri.parse(
+        'http://192.168.92.173/tutoring_app/fetch_session_id.php?recipient=$recipient&user=${widget.currentUser}'));
+
+    if (response.statusCode == 200) {
+      final responseData = json.decode(response.body);
+      if (responseData['status'] == 'success') {
+        return responseData['session_id'].toString();
+      } else {
+        throw Exception(
+            'Failed to fetch session ID: ${responseData['message']}');
+      }
+    } else {
+      throw Exception('Failed to fetch session ID: ${response.reasonPhrase}');
+    }
+  }
+
+  void _navigateToChatScreen(String recipient, String recipientImage) async {
+    try {
+      String? sessionId = await _fetchSessionId(recipient);
+      if (sessionId != null) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChatScreen(
+              currentUser: widget.currentUser,
+              recipient: recipient,
+              recipientImage: recipientImage,
+              currentUserImage: widget.currentUserImage,
+              sessionId: sessionId,
+              currentUserRole: '', // ปรับตามบทบาทของผู้ใช้
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Session ID not found')),
+        );
+      }
+    } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load conversations: $e')),
+        SnackBar(content: Text('Failed to fetch session ID: $e')),
       );
+    }
+  }
+
+  Future<void> createNotification(
+      String sender, String recipient, String message) async {
+    final response = await http.post(
+      Uri.parse('http://192.168.92.173/tutoring_app/create_notification.php'),
+      body: {
+        'sender': sender,
+        'recipient': recipient,
+        'message': message,
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final responseData = json.decode(response.body);
+      if (responseData['status'] == 'success') {
+        print('Notification created successfully');
+      } else {
+        print('Failed to create notification: ${responseData['message']}');
+      }
+    } else {
+      print('Failed to create notification: ${response.reasonPhrase}');
     }
   }
 
@@ -50,44 +151,64 @@ class _ChatListScreenState extends State<ChatListScreen> {
       appBar: AppBar(
         title: Text('Chats'),
       ),
-      body: ListView.builder(
-        itemCount: _conversations.length,
-        itemBuilder: (context, index) {
-          final conversation = _conversations[index];
-          return ListTile(
-            leading: CircleAvatar(
-              backgroundImage: conversation['recipient_image'] != null
-                  ? NetworkImage(
-                      'http://10.5.50.84/tutoring_app/uploads/${conversation['recipient_image']}')
-                  : AssetImage('assets/default_profile.jpg') as ImageProvider,
-            ),
-            title: Text(conversation['conversation_with']),
-            subtitle: Text(conversation['last_message'] ?? ''),
-            trailing: Text(
-              conversation['timestamp'] != null
-                  ? _formatTimestamp(conversation['timestamp'])
-                  : '',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ChatScreen(
-                    currentUser: widget.currentUser,
-                    recipient: conversation['recipient_username'],
-                    recipientImage: conversation['recipient_image'] != null
-                        ? 'http://10.5.50.84/tutoring_app/uploads/${conversation['recipient_image']}'
-                        : 'assets/default_profile.jpg',
-                    currentUserImage:
-                        'path_to_current_user_image', // Add logic to fetch current user image
-                  ),
-                ),
-              );
-            },
-          );
-        },
-      ),
+      body: _isLoading
+          ? Center(child: CircularProgressIndicator())
+          : _errorMessage != null
+              ? Center(child: Text(_errorMessage!))
+              : _conversations.isNotEmpty
+                  ? ListView.builder(
+                      itemCount: _conversations.length,
+                      itemBuilder: (context, index) {
+                        final conversation = _conversations[index];
+                        return Card(
+                          margin: EdgeInsets.symmetric(
+                              vertical: 8.0, horizontal: 16.0),
+                          elevation: 2.0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(15.0),
+                          ),
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundImage: conversation[
+                                          'recipient_image'] !=
+                                      null
+                                  ? NetworkImage(
+                                      'http://192.168.92.173/tutoring_app/uploads/${conversation['recipient_image']}')
+                                  : AssetImage('images/default_profile.jpg')
+                                      as ImageProvider,
+                            ),
+                            title: Text(conversation['conversation_with'] ??
+                                'unknown_user'),
+                            subtitle: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                maxWidth:
+                                    MediaQuery.of(context).size.width - 100,
+                              ),
+                              child: Text(
+                                conversation['last_message'] ?? '',
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            trailing: Text(
+                              conversation['timestamp'] != null
+                                  ? _formatTimestamp(conversation['timestamp'])
+                                  : '',
+                              style:
+                                  TextStyle(fontSize: 12, color: Colors.grey),
+                            ),
+                            onTap: () {
+                              _navigateToChatScreen(
+                                  conversation['recipient_username'] ??
+                                      'unknown_user',
+                                  conversation['recipient_image'] != null
+                                      ? 'http://192.168.92.173/tutoring_app/uploads/${conversation['recipient_image']}'
+                                      : 'images/default_profile.jpg');
+                            },
+                          ),
+                        );
+                      },
+                    )
+                  : Center(child: Text('No conversations found')),
     );
   }
 

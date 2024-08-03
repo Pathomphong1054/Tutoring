@@ -31,7 +31,7 @@ class SelectionScreen extends StatelessWidget {
               () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => LoginScreen_tutor()),
+                  MaterialPageRoute(builder: (context) => LoginScreenTutor()),
                 );
               },
             ),
@@ -63,7 +63,7 @@ class SelectionScreen extends StatelessWidget {
       onTap: onTap,
       child: Container(
         width: 250,
-        height: 300, 
+        height: 300,
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(15),
@@ -86,8 +86,8 @@ class SelectionScreen extends StatelessWidget {
             children: [
               Image.asset(
                 imagePath,
-                width: 200, 
-                height: 200, 
+                width: 200,
+                height: 200,
                 fit: BoxFit.cover,
               ),
               SizedBox(height: 15),

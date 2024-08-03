@@ -1,78 +1,79 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 
-class StudentProfileScreen extends StatefulWidget {
-  final String userName;
-  final VoidCallback onProfileUpdated;
+class ProfileScreen extends StatefulWidget {
+  final String username;
+  final String profileImageUrl;
+  final String userRole; // Role of the user being viewed
 
-  const StudentProfileScreen({
-    Key? key,
-    required this.userName,
-    required this.onProfileUpdated,
-  }) : super(key: key);
+  const ProfileScreen({
+    required this.username,
+    required this.profileImageUrl,
+    required this.userRole,
+  });
 
   @override
-  _StudentProfileScreenState createState() => _StudentProfileScreenState();
+  _ProfileScreenState createState() => _ProfileScreenState();
 }
 
-class _StudentProfileScreenState extends State<StudentProfileScreen> {
+class _ProfileScreenState extends State<ProfileScreen> {
   File? _profileImage;
-  TextEditingController _nameController = TextEditingController();
-  TextEditingController _emailController = TextEditingController();
-  TextEditingController _addressController = TextEditingController();
-  String? _profileImageUrl;
+  String? _profileImageUrl; // Add this line to declare the variable
+  bool _isLoading = false;
   bool _isEditing = false;
-  bool isLoading = false;
+  late TextEditingController _nameController;
+  late TextEditingController _emailController;
+  late TextEditingController _addressController;
 
   @override
   void initState() {
     super.initState();
+    _nameController = TextEditingController();
+    _emailController = TextEditingController();
+    _addressController = TextEditingController();
+    _profileImageUrl = widget.profileImageUrl; // Initialize the variable
     _fetchProfileData();
   }
 
   Future<void> _fetchProfileData() async {
     setState(() {
-      isLoading = true;
+      _isLoading = true;
     });
 
     try {
       final url = Uri.parse(
-          'http://192.168.92.173/tutoring_app/get_student_profile.php?username=${widget.userName}');
-      print('Fetching profile for username: ${widget.userName}');
+          'http://192.168.92.173/tutoring_app/get_${widget.userRole}_profile.php?username=${widget.username}');
       final response = await http.get(url);
 
       if (response.statusCode == 200) {
         final profileData = json.decode(response.body);
-        print('Profile Data: $profileData');
-
         if (profileData['status'] == 'success') {
           setState(() {
             _nameController.text = profileData['name'] ?? '';
             _emailController.text = profileData['email'] ?? '';
             _addressController.text = profileData['address'] ?? '';
-            _profileImageUrl = profileData['profile_image'];
-            isLoading = false;
+            _isLoading = false;
           });
         } else {
           _showSnackBar(
               'Failed to load profile data: ${profileData['message']}');
           setState(() {
-            isLoading = false;
+            _isLoading = false;
           });
         }
       } else {
         _showSnackBar('Failed to load profile data');
         setState(() {
-          isLoading = false;
+          _isLoading = false;
         });
       }
     } catch (e) {
       _showSnackBar('Error: $e');
       setState(() {
-        isLoading = false;
+        _isLoading = false;
       });
     }
   }
@@ -85,7 +86,6 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
 
   Future<void> _pickImage(ImageSource source) async {
     final pickedFile = await ImagePicker().pickImage(source: source);
-
     if (pickedFile != null) {
       setState(() {
         _profileImage = File(pickedFile.path);
@@ -97,39 +97,30 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
     try {
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('http://192.168.92.173/tutoring_app/upload_profile_student.php'),
+        Uri.parse(
+            'http://192.168.92.173/tutoring_app/upload_profile_${widget.userRole}.php'),
       );
-
       request.files.add(
         await http.MultipartFile.fromPath(
           'profile_images',
           imageFile.path,
         ),
       );
-
-      request.fields['username'] = widget.userName;
+      request.fields['username'] = widget.username;
       request.fields['name'] = _nameController.text;
       request.fields['email'] = _emailController.text;
       request.fields['address'] = _addressController.text;
 
       var response = await request.send();
-
       if (response.statusCode == 200) {
         var responseBody = await response.stream.bytesToString();
         var jsonData = json.decode(responseBody);
-
         if (jsonData['status'] == "success") {
-          String? imageUrl = jsonData['image_url'];
-
           setState(() {
-            _profileImageUrl = imageUrl;
-          });
-
-          _showSnackBar('Profile updated successfully');
-          widget.onProfileUpdated();
-          setState(() {
+            _profileImageUrl = jsonData['image_url'];
             _isEditing = false;
           });
+          _showSnackBar('Profile updated successfully');
         } else {
           _showSnackBar('Failed to update profile: ${jsonData['message']}');
         }
@@ -155,19 +146,17 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
       try {
         var response = await http.post(
           Uri.parse(
-              'http://192.168.92.173/tutoring_app/update_student_profile.php'),
+              'http://192.168.92.173/tutoring_app/update_${widget.userRole}_profile.php'),
           body: {
-            'username': widget.userName,
+            'username': widget.username,
             'name': _nameController.text,
             'email': _emailController.text,
             'address': _addressController.text,
           },
         );
-
         var jsonData = json.decode(response.body);
         if (jsonData['status'] == 'success') {
           _showSnackBar('Profile updated successfully');
-          widget.onProfileUpdated();
           setState(() {
             _isEditing = false;
           });
@@ -184,7 +173,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Student Profile'),
+        title: Text('${widget.userRole.capitalize()} Profile'),
         backgroundColor: Colors.blue[800],
         actions: [
           if (_isEditing)
@@ -203,54 +192,48 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
             ),
         ],
       ),
-      body: isLoading
+      body: _isLoading
           ? Center(child: CircularProgressIndicator())
-          : _nameController.text.isEmpty
-              ? Center(child: Text('No profile data available'))
-              : SingleChildScrollView(
-                  padding: EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Center(
-                        child: GestureDetector(
-                          onTap: _isEditing
-                              ? () => _pickImage(ImageSource.gallery)
-                              : null,
-                          child: CircleAvatar(
-                            radius: 70,
-                            backgroundImage: _profileImage != null
-                                ? FileImage(_profileImage!)
-                                : (_profileImageUrl != null
-                                    ? NetworkImage(
-                                        'http://192.168.92.173/tutoring_app/uploads/$_profileImageUrl')
-                                    : AssetImage('images/default_profile.jpg')
-                                        as ImageProvider),
-                            child: Align(
-                              alignment: Alignment.bottomRight,
-                              child: Icon(
-                                Icons.camera_alt,
-                                color: _isEditing
-                                    ? Colors.blue[800]
-                                    : Colors.transparent,
-                                size: 30,
-                              ),
-                            ),
+          : SingleChildScrollView(
+              padding: EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Center(
+                    child: GestureDetector(
+                      onTap: _isEditing
+                          ? () => _pickImage(ImageSource.gallery)
+                          : null,
+                      child: CircleAvatar(
+                        radius: 70,
+                        backgroundImage: _profileImage != null
+                            ? FileImage(_profileImage!)
+                            : NetworkImage(_profileImageUrl ?? ''),
+                        child: Align(
+                          alignment: Alignment.bottomRight,
+                          child: Icon(
+                            Icons.camera_alt,
+                            color: _isEditing
+                                ? Colors.blue[800]
+                                : Colors.transparent,
+                            size: 30,
                           ),
                         ),
                       ),
-                      SizedBox(height: 20),
-                      _buildProfileFieldWithLabel(
-                          'Name', _nameController, Icons.person),
-                      SizedBox(height: 10),
-                      _buildProfileFieldWithLabel(
-                          'Email', _emailController, Icons.email),
-                      SizedBox(height: 10),
-                      _buildProfileFieldWithLabel(
-                          'Address', _addressController, Icons.location_city),
-                    ],
+                    ),
                   ),
-                ),
+                  SizedBox(height: 20),
+                  _buildProfileFieldWithLabel(
+                      'Name', _nameController, Icons.person),
+                  SizedBox(height: 10),
+                  _buildProfileFieldWithLabel(
+                      'Email', _emailController, Icons.email),
+                  SizedBox(height: 10),
+                  _buildProfileFieldWithLabel(
+                      'Address', _addressController, Icons.location_city),
+                ],
+              ),
+            ),
     );
   }
 
@@ -323,5 +306,12 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
         ],
       ),
     );
+  }
+}
+
+extension StringExtension on String {
+  String capitalize() {
+    if (this.isEmpty) return this;
+    return this[0].toUpperCase() + this.substring(1);
   }
 }

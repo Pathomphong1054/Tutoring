@@ -1,7 +1,9 @@
-import 'package:apptutor_project/TutorProfileScreen.dart';
+import 'package:apptutor_project/chat_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'TutorProfileScreen.dart';
+import 'StudentProfileScreen.dart';
 
 class SubjectDetailScreen extends StatefulWidget {
   final Map<String, dynamic> subject;
@@ -23,6 +25,7 @@ class SubjectDetailScreen extends StatefulWidget {
 
 class _SubjectDetailScreenState extends State<SubjectDetailScreen> {
   List<dynamic> tutors = [];
+  List<dynamic> messages = [];
   bool isLoading = false;
   final TextEditingController _postController = TextEditingController();
   DateTime? startDate;
@@ -34,6 +37,7 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen> {
   void initState() {
     super.initState();
     _fetchTutorsBySubject();
+    _fetchMessages();
   }
 
   Future<void> _fetchTutorsBySubject() async {
@@ -42,7 +46,7 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen> {
     });
 
     var url = Uri.parse(
-        'http://10.5.50.84/tutoring_app/fetch_tutors_by_subject.php?subject=${widget.subject['name']}');
+        'http://192.168.92.173/tutoring_app/fetch_tutors_by_subject.php?subject=${widget.subject['name']}');
     try {
       var response = await http.get(url);
 
@@ -56,6 +60,32 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen> {
       }
     } catch (e) {
       _showErrorSnackBar('An error occurred while fetching tutors');
+    } finally {
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _fetchMessages() async {
+    setState(() {
+      isLoading = true;
+    });
+
+    var url = Uri.parse('http://192.168.92.173/tutoring_app/fetch_messages.php');
+    try {
+      var response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        var data = json.decode(response.body);
+        setState(() {
+          messages = data['messages'];
+        });
+      } else {
+        _showErrorSnackBar('Failed to load messages');
+      }
+    } catch (e) {
+      _showErrorSnackBar('An error occurred while fetching messages');
     } finally {
       setState(() {
         isLoading = false;
@@ -91,7 +121,7 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen> {
       print('Posting message: $messageObject');
 
       // Post message to the database
-      var url = Uri.parse('http://10.5.50.84/tutoring_app/post_message.php');
+      var url = Uri.parse('http://192.168.92.173/tutoring_app/post_message.php');
       var response =
           await http.post(url, body: json.encode(messageObject), headers: {
         'Content-Type': 'application/json',
@@ -115,6 +145,7 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen> {
             startTime = null;
             endTime = null;
           });
+          _fetchMessages(); // Fetch the updated list of messages
         } else {
           _showErrorSnackBar(
               'Failed to post message: ${responseData['message']}');
@@ -160,6 +191,58 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen> {
         }
       });
     }
+  }
+
+  void _navigateToChatScreen(
+      String recipient, String recipientImage, String sessionId) {
+    if (sessionId.isEmpty) {
+      print('Error: sessionId is empty');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: sessionId is empty')),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ChatScreen(
+          currentUser: widget.userName,
+          recipient: recipient,
+          recipientImage: recipientImage,
+          currentUserImage: widget.profileImageUrl,
+          sessionId: sessionId,
+          currentUserRole: widget.userRole, // Pass currentUserRole here
+        ),
+      ),
+    );
+  }
+
+  void _viewProfile(String userName) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) {
+          if (widget.userRole == 'tutor') {
+            return StudentProfileScreen(
+              userName: userName,
+              onProfileUpdated: () {},
+            );
+          } else {
+            return TutorProfileScreen(
+              userName: userName,
+              userRole: 'tutor',
+              canEdit: false,
+              currentUser: widget.userName,
+              currentUserImage: widget.profileImageUrl,
+              onProfileUpdated: () {},
+              username: '',
+              profileImageUrl: '',
+            );
+          }
+        },
+      ),
+    );
   }
 
   @override
@@ -314,7 +397,7 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen> {
                         final profileImageUrl =
                             tutor['profile_images'] != null &&
                                     tutor['profile_images'].isNotEmpty
-                                ? 'http://10.5.50.84/tutoring_app/uploads/' +
+                                ? 'http://192.168.92.173/tutoring_app/uploads/' +
                                     tutor['profile_images']
                                 : 'images/default_profile.jpg';
                         final username = tutor['name'] ?? 'No Username';
@@ -329,6 +412,11 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen> {
                                   userRole: 'Tutor',
                                   canEdit: false,
                                   onProfileUpdated: () {},
+                                  currentUser:
+                                      widget.userName, // ใช้ค่าจาก widget
+                                  currentUserImage: widget.profileImageUrl,
+                                  username: '',
+                                  profileImageUrl: '', // ใช้ค่าจาก widget
                                 ),
                               ),
                             );
@@ -336,12 +424,17 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen> {
                           child: Card(
                             color: Colors.white.withOpacity(0.8),
                             child: ListTile(
-                              leading: CircleAvatar(
-                                backgroundImage:
-                                    profileImageUrl.contains('http')
-                                        ? NetworkImage(profileImageUrl)
-                                        : AssetImage(profileImageUrl)
-                                            as ImageProvider,
+                              leading: GestureDetector(
+                                onTap: () {
+                                  _viewProfile(username);
+                                },
+                                child: CircleAvatar(
+                                  backgroundImage:
+                                      profileImageUrl.contains('http')
+                                          ? NetworkImage(profileImageUrl)
+                                          : AssetImage(profileImageUrl)
+                                              as ImageProvider,
+                                ),
                               ),
                               title: Text(name,
                                   style: TextStyle(
@@ -364,9 +457,111 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen> {
                       },
                     ),
                   ),
+                  SizedBox(height: 20),
+                  Text(
+                    'Messages:',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: messages.length,
+                      itemBuilder: (context, index) {
+                        final message = messages[index];
+                        final userName = message['userName'] ?? 'Unknown';
+                        final userImageUrl =
+                            message['profileImageUrl'] != null &&
+                                    message['profileImageUrl'].isNotEmpty
+                                ? 'http://192.168.92.173/tutoring_app/uploads/' +
+                                    message['profileImageUrl']
+                                : 'images/default_profile.jpg';
+                        final messageText = message['message'] ?? '';
+                        final startDate = message['startDate'] ?? '';
+                        final endDate = message['endDate'] ?? '';
+                        final startTime = message['startTime'] ?? '';
+                        final endTime = message['endTime'] ?? '';
+                        final sessionId = message['session_id'] ?? '';
+
+                        return _buildMessageCard(
+                          userName,
+                          userImageUrl,
+                          messageText,
+                          startDate,
+                          endDate,
+                          startTime,
+                          endTime,
+                          sessionId,
+                        );
+                      },
+                    ),
+                  ),
                 ],
               ),
             ),
+    );
+  }
+
+  Widget _buildMessageCard(
+      String userName,
+      String userImageUrl,
+      String messageText,
+      String startDate,
+      String endDate,
+      String startTime,
+      String endTime,
+      String sessionId) {
+    return Card(
+      color: Colors.white.withOpacity(0.8),
+      margin: EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ListTile(
+              leading: GestureDetector(
+                onTap: () {
+                  _viewProfile(userName);
+                },
+                child: CircleAvatar(
+                  backgroundImage: userImageUrl.contains('http')
+                      ? NetworkImage(userImageUrl)
+                      : AssetImage(userImageUrl) as ImageProvider,
+                  radius: 30,
+                ),
+              ),
+              title: Text(userName,
+                  style: TextStyle(color: Colors.black, fontSize: 18)),
+              subtitle: Text(messageText,
+                  style: TextStyle(color: Colors.black, fontSize: 16)),
+            ),
+            SizedBox(height: 8.0),
+            Divider(color: Colors.grey),
+            SizedBox(height: 8.0),
+            Text('Start Date: $startDate',
+                style: TextStyle(color: Colors.black, fontSize: 14)),
+            Text('End Date: $endDate',
+                style: TextStyle(color: Colors.black, fontSize: 14)),
+            Text('Start Time: $startTime',
+                style: TextStyle(color: Colors.black, fontSize: 14)),
+            Text('End Time: $endTime',
+                style: TextStyle(color: Colors.black, fontSize: 14)),
+            SizedBox(height: 12.0),
+            Align(
+              alignment: Alignment.centerRight,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  _navigateToChatScreen(userName, userImageUrl, sessionId);
+                },
+                icon: Icon(Icons.chat),
+                label: Text('Chat'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

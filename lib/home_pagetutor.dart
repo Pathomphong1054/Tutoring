@@ -1,13 +1,13 @@
 import 'package:apptutor_project/ChatListScreen.dart';
+import 'package:apptutor_project/StudentProfileScreen.dart';
+import 'package:apptutor_project/SubjectCategoryScreen.dart';
+import 'package:apptutor_project/TutorProfileScreen.dart';
+import 'package:apptutor_project/chat_screen.dart';
+import 'package:apptutor_project/notification_screen.dart';
+import 'package:apptutor_project/selection_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'StudentProfileScreen.dart';
-import 'TutorProfileScreen.dart';
-import 'chat_screen.dart';
-import 'notification_screen.dart';
-import 'selection_screen.dart';
-import 'SubjectCategoryScreen.dart';
 
 class HomePage2 extends StatefulWidget {
   final String userName;
@@ -50,7 +50,7 @@ class _HomePage2State extends State<HomePage2> {
     setState(() {
       isLoading = true;
     });
-    var url = Uri.parse('http://10.5.50.84/tutoring_app/fetch_tutors.php');
+    var url = Uri.parse('http://192.168.92.173/tutoring_app/fetch_tutors.php');
     try {
       var response = await http.get(url);
 
@@ -90,7 +90,7 @@ class _HomePage2State extends State<HomePage2> {
 
   Future<void> _fetchProfileImage() async {
     var url = Uri.parse(
-        'http://10.5.50.84/tutoring_app/get_user_profile.php?username=${_userName}&role=${widget.userRole}');
+        'http://192.168.92.173/tutoring_app/get_user_profile.php?username=${_userName}&role=${widget.userRole}');
     try {
       var response = await http.get(url);
       if (response.statusCode == 200) {
@@ -117,7 +117,7 @@ class _HomePage2State extends State<HomePage2> {
     setState(() {
       isLoading = true;
     });
-    var url = Uri.parse('http://10.5.50.84/tutoring_app/fetch_messages.php');
+    var url = Uri.parse('http://192.168.92.173/tutoring_app/fetch_messages.php');
     try {
       var response = await http.get(url);
 
@@ -145,6 +145,54 @@ class _HomePage2State extends State<HomePage2> {
 
   void _onProfileUpdated() {
     _fetchProfileImage();
+  }
+
+  void _viewProfile(String userName) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => widget.userRole == 'student'
+            ? TutorProfileScreen(
+                userName: userName,
+                onProfileUpdated: () {},
+                canEdit: false,
+                userRole: 'tutor',
+                currentUser: widget.userName,
+                currentUserImage: widget.profileImageUrl,
+                username: '',
+                profileImageUrl: '',
+              )
+            : StudentProfileScreen(
+                userName: userName,
+                onProfileUpdated: _onProfileUpdated,
+              ),
+      ),
+    );
+  }
+
+  void _navigateToChatScreen(
+      String recipient, String recipientImage, String sessionId) {
+    if (sessionId.isEmpty) {
+      print('Error: sessionId is empty');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: sessionId is empty')),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ChatScreen(
+          currentUser: widget.userName,
+          recipient: recipient,
+          recipientImage: recipientImage,
+          currentUserImage: widget.profileImageUrl,
+          sessionId: sessionId,
+          currentUserRole: widget.userRole,
+        ),
+      ),
+    );
   }
 
   @override
@@ -195,6 +243,10 @@ class _HomePage2State extends State<HomePage2> {
                             onProfileUpdated: _onProfileUpdated,
                             canEdit: true,
                             userRole: 'tutor',
+                            currentUser: widget.userName,
+                            currentUserImage: widget.profileImageUrl,
+                            username: '',
+                            profileImageUrl: '',
                           ),
                   ),
                 );
@@ -204,7 +256,7 @@ class _HomePage2State extends State<HomePage2> {
                 backgroundImage: _profileImageUrl != null &&
                         _profileImageUrl!.isNotEmpty
                     ? NetworkImage(
-                        'http://10.5.50.84/tutoring_app/uploads/$_profileImageUrl')
+                        'http://192.168.92.173/tutoring_app/uploads/$_profileImageUrl')
                     : AssetImage('images/default_profile.jpg') as ImageProvider,
               ),
             ),
@@ -350,7 +402,7 @@ class _HomePage2State extends State<HomePage2> {
                     final subject = tutor['subject'] ?? 'No Subject';
                     final profileImageUrl = tutor['profile_images'] != null &&
                             tutor['profile_images'].isNotEmpty
-                        ? 'http://10.5.50.84/tutoring_app/uploads/' +
+                        ? 'http://192.168.92.173/tutoring_app/uploads/' +
                             tutor['profile_images']
                         : 'images/default_profile.jpg';
                     final username = tutor['name'] ?? 'No Username';
@@ -365,6 +417,10 @@ class _HomePage2State extends State<HomePage2> {
                               userRole: 'Tutor',
                               canEdit: false,
                               onProfileUpdated: () {},
+                              currentUser: widget.userName,
+                              currentUserImage: widget.profileImageUrl,
+                              username: '',
+                              profileImageUrl: '',
                             ),
                           ),
                         );
@@ -430,7 +486,7 @@ class _HomePage2State extends State<HomePage2> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0),
           child: Text(
-            'Post_Messages',
+            'Post Messages',
             style: TextStyle(
                 fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black),
           ),
@@ -446,7 +502,7 @@ class _HomePage2State extends State<HomePage2> {
                     final userName = message['userName'] ?? '';
                     final userImageUrl = message['profileImageUrl'] != null &&
                             message['profileImageUrl'].isNotEmpty
-                        ? 'http://10.5.50.84/tutoring_app/uploads/' +
+                        ? 'http://192.168.92.173/tutoring_app/uploads/' +
                             message['profileImageUrl']
                         : 'images/default_profile.jpg';
                     final messageText = message['message'] ?? '';
@@ -454,15 +510,22 @@ class _HomePage2State extends State<HomePage2> {
                     final endDate = message['endDate'] ?? '';
                     final startTime = message['startTime'] ?? '';
                     final endTime = message['endTime'] ?? '';
+                    final sessionId = message['session_id'] ?? '';
 
-                    return _buildMessageCard(
-                      userName,
-                      userImageUrl,
-                      messageText,
-                      startDate,
-                      endDate,
-                      startTime,
-                      endTime,
+                    return GestureDetector(
+                      onTap: () {
+                        _viewProfile(userName);
+                      },
+                      child: _buildMessageCard(
+                        userName,
+                        userImageUrl,
+                        messageText,
+                        startDate,
+                        endDate,
+                        startTime,
+                        endTime,
+                        sessionId,
+                      ),
                     );
                   },
                 ),
@@ -505,22 +568,36 @@ class _HomePage2State extends State<HomePage2> {
       String startDate,
       String endDate,
       String startTime,
-      String endTime) {
+      String endTime,
+      String sessionId) {
     return Card(
       color: Colors.white.withOpacity(0.8),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundImage: userImageUrl.contains('http')
-              ? NetworkImage(userImageUrl)
-              : AssetImage(userImageUrl) as ImageProvider,
-        ),
-        title:
-            Text(userName, style: TextStyle(color: Colors.black, fontSize: 18)),
-        subtitle: Column(
+      margin: EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(messageText,
-                style: TextStyle(color: Colors.black, fontSize: 16)),
+            ListTile(
+              leading: GestureDetector(
+                onTap: () {
+                  _viewProfile(userName);
+                },
+                child: CircleAvatar(
+                  backgroundImage: userImageUrl.contains('http')
+                      ? NetworkImage(userImageUrl)
+                      : AssetImage(userImageUrl) as ImageProvider,
+                  radius: 30,
+                ),
+              ),
+              title: Text(userName,
+                  style: TextStyle(color: Colors.black, fontSize: 18)),
+              subtitle: Text(messageText,
+                  style: TextStyle(color: Colors.black, fontSize: 16)),
+            ),
+            SizedBox(height: 8.0),
+            Divider(color: Colors.grey),
+            SizedBox(height: 8.0),
             Text('Start Date: $startDate',
                 style: TextStyle(color: Colors.black, fontSize: 14)),
             Text('End Date: $endDate',
@@ -529,6 +606,20 @@ class _HomePage2State extends State<HomePage2> {
                 style: TextStyle(color: Colors.black, fontSize: 14)),
             Text('End Time: $endTime',
                 style: TextStyle(color: Colors.black, fontSize: 14)),
+            SizedBox(height: 12.0),
+            Align(
+              alignment: Alignment.centerRight,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  _navigateToChatScreen(userName, userImageUrl, sessionId);
+                },
+                icon: Icon(Icons.chat),
+                label: Text('Chat'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -557,19 +648,19 @@ class _HomePage2State extends State<HomePage2> {
               MaterialPageRoute(
                 builder: (context) => ChatListScreen(
                   currentUser: widget.userName,
-                  recipient:
-                      'recipient_username', // Replace with actual recipient usernam // Pass initial message if any
-                  recipientImage:
-                      'recipient_image_url', // Replace with actual recipient image URL
-                  currentUserImage:
-                      widget.profileImageUrl, // Current user's image URL
+                  currentUserImage: '',
                 ),
               ),
             );
             break;
           case 2:
-            Navigator.push(context,
-                MaterialPageRoute(builder: (context) => NotificationScreen()));
+            Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => NotificationScreen(
+                          userName: widget.userName,
+                          userRole: widget.userRole,
+                        )));
             break;
         }
       },

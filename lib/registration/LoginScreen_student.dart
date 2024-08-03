@@ -1,5 +1,6 @@
 import 'package:apptutor_project/home_pagetutor.dart';
 import 'package:apptutor_project/registration/student_registration_screen.dart';
+import 'package:apptutor_project/registration/students_password_reset_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -23,7 +24,7 @@ class _LoginScreenStudentState extends State<LoginScreenStudent> {
     });
 
     final response = await http.post(
-      Uri.parse('http://10.5.50.84/tutoring_app/loginstudent.php'),
+      Uri.parse('http://192.168.92.173/tutoring_app/loginstudent.php'),
       body: {
         'email': email,
         'password': password,
@@ -40,7 +41,7 @@ class _LoginScreenStudentState extends State<LoginScreenStudent> {
         final String userName = responseData['name'];
         final String userRole = responseData['role'];
         final String profileImageUrl = responseData['profile_image'] != null
-            ? 'http://10.5.50.84/tutoring_app/uploads/' +
+            ? 'http://192.168.92.173/tutoring_app/uploads/' +
                 responseData['profile_image']
             : 'images/default_profile.jpg';
 
@@ -98,8 +99,8 @@ class _LoginScreenStudentState extends State<LoginScreenStudent> {
                       Center(
                         child: Image.asset(
                           'images/apptutor.png',
-                          height: 450,
-                          width: 450,
+                          height: 150,
+                          width: 150,
                           fit: BoxFit.contain,
                         ),
                       ),
@@ -161,6 +162,21 @@ class _LoginScreenStudentState extends State<LoginScreenStudent> {
                             );
                           },
                           child: Text('Don\'t have an account? Register here'),
+                        ),
+                      ),
+                      SizedBox(height: 10),
+                      Center(
+                        child: TextButton(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    UpdatePasswordScreen (userRole: 'student'),
+                              ),
+                            );
+                          },
+                          child: Text('Forgot Password? Reset here'),
                         ),
                       ),
                     ],
